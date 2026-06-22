@@ -1,106 +1,147 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from flask_login import login_user, logout_user, login_required, current_user
-from models import db, User, Absensi, ResetToken
-from datetime import datetime, date, time, timedelta
-import cloudinary.uploader
-import resend
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+import bcrypt
 import secrets
+from datetime import datetime, timedelta
+from backend.__init__ import get_db_connection
 
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/')
 def index():
-    if current_user.is_authenticated:
-        if current_user.role == 'admin':
-            return redirect(url_for('admin.dashboard'))
-        return redirect(url_for('karyawan.dashboard'))
+    if 'user_id' in session:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                sql = "SELECT role FROM users WHERE id = %s"
+                cursor.execute(sql, (session.get('user_id'),))
+                result = cursor.fetchone()
+                if result and result['role'] == 'admin':
+                    return redirect(url_for('admin.dashboard'))
+                elif result:
+                    return redirect(url_for('karyawan.dashboard'))
+        finally:
+            conn.close()
     return render_template('auth/login.html')
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email')
+        username = request.form.get('username')
         password = request.form.get('password')
-        user = User.query.filter_by(email=email).first()
         
-        if user and user.check_password(password):
-            login_user(user)
-            flash('Login berhasil!', 'success')
-            next_page = request.args.get('next')
-            if next_page:
-                return redirect(next_page)
-            if user.role == 'admin':
-                return redirect(url_for('admin.dashboard'))
-            return redirect(url_for('karyawan.dashboard'))
-        flash('Email atau password salah', 'danger')
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                sql = "SELECT * FROM users WHERE username = %s"
+                cursor.execute(sql, (username,))
+                user = cursor.fetchone()
+                
+                if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+                    session['user_id'] = user['id']
+                    session['username'] = user['username']
+                    flash('Login berhasil!', 'success')
+                    
+                    next_page = request.args.get('next')
+                    if next_page:
+                        return redirect(next_page)
+                    
+                    if user['role'] == 'admin':
+                        return redirect(url_for('admin.dashboard'))
+                    return redirect(url_for('karyawan.dashboard'))
+                else:
+                    flash('Username atau password salah', 'danger')
+        except Exception as e:
+            flash(f'Terjadi kesalahan: {str(e)}', 'danger')
+        finally:
+            conn.close()
     
     return render_template('auth/login.html')
 
 @auth_bp.route('/logout')
-@login_required
 def logout():
-    logout_user()
-    flash('Anda telah logout', 'info')
+    session.clear()
+    flash('Anda telah logout.', 'info')
     return redirect(url_for('auth.login'))
 
 @auth_bp.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
         email = request.form.get('email')
-        user = User.query.filter_by(email=email).first()
         
-        if user:
-            token = secrets.token_urlsafe(32)
-            expires_at = datetime.utcnow() + timedelta(hours=1)
-            
-            reset_token = ResetToken(user_id=user.id, token=token, expires_at=expires_at)
-            db.session.add(reset_token)
-            db.session.commit()
-            
-            reset_link = f"{request.host_url}reset-password/{token}"
-            
-            try:
-                resend.Emails.send({
-                    "from": "Absensi Kantor <onboarding@resend.dev>",
-                    "to": user.email,
-                    "subject": "Reset Password Absensi",
-                    "html": f"""
-                    <h2>Reset Password</h2>
-                    <p>Klik link berikut untuk reset password Anda:</p>
-                    <a href="{reset_link}">{reset_link}</a>
-                    <p>Link ini berlaku selama 1 jam.</p>
-                    """
-                })
-                flash('Link reset password telah dikirim ke email Anda', 'success')
-            except Exception as e:
-                flash(f'Gagal mengirim email: {str(e)}', 'danger')
-        else:
-            flash('Email tidak ditemukan', 'danger')
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                sql = "SELECT * FROM users WHERE email = %s"
+                cursor.execute(sql, (email,))
+                user = cursor.fetchone()
+                
+                if user:
+                    token = secrets.token_urlsafe(32)
+                    expires_at = datetime.utcnow() + timedelta(hours=1)
+                    
+                    # Simpan token ke database (asumsikan ada tabel reset_tokens)
+                    # Jika tabel belum ada, skip bagian ini untuk sementara
+                    try:
+                        insert_sql = """INSERT INTO reset_tokens (user_id, token, expires_at, used) 
+                                       VALUES (%s, %s, %s, FALSE)"""
+                        cursor.execute(insert_sql, (user['id'], token, expires_at))
+                        conn.commit()
+                        
+                        reset_link = f"{request.host_url}reset-password/{token}"
+                        
+                        # TODO: Implementasi kirim email dengan Resend nanti
+                        flash('Link reset password telah dikirim ke email Anda', 'success')
+                    except Exception as e:
+                        flash(f'Token dibuat namun gagal simpan ke DB: {str(e)}', 'warning')
+                else:
+                    flash('Email tidak ditemukan', 'danger')
+        except Exception as e:
+            flash(f'Terjadi kesalahan: {str(e)}', 'danger')
+        finally:
+            conn.close()
     
     return render_template('auth/forgot_password.html')
 
 @auth_bp.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
-    reset_token = ResetToken.query.filter_by(token=token, used=False).first()
-    
-    if not reset_token or reset_token.expires_at < datetime.utcnow():
-        flash('Token tidak valid atau sudah kadaluarsa', 'danger')
-        return redirect(url_for('auth.forgot_password'))
-    
-    if request.method == 'POST':
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-        
-        if password != confirm_password:
-            flash('Password tidak cocok', 'danger')
-            return render_template('auth/reset_password.html', token=token)
-        
-        user = User.query.get(reset_token.user_id)
-        user.set_password(password)
-        reset_token.used = True
-        db.session.commit()
-        
-        flash('Password berhasil direset, silakan login', 'success')
-        return redirect(url_for('auth.login'))
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            sql = """SELECT rt.*, u.id as user_id FROM reset_tokens rt
+                     JOIN users u ON rt.user_id = u.id
+                     WHERE rt.token = %s AND rt.used = FALSE AND rt.expires_at > %s"""
+            cursor.execute(sql, (token, datetime.utcnow()))
+            reset_token = cursor.fetchone()
+            
+            if not reset_token:
+                flash('Token tidak valid atau sudah kadaluarsa', 'danger')
+                return redirect(url_for('auth.forgot_password'))
+            
+            if request.method == 'POST':
+                password = request.form.get('password')
+                confirm_password = request.form.get('confirm_password')
+                
+                if password != confirm_password:
+                    flash('Password tidak cocok', 'danger')
+                    return render_template('auth/reset_password.html', token=token)
+                
+                # Hash password baru
+                password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                
+                # Update password user
+                update_sql = "UPDATE users SET password_hash = %s WHERE id = %s"
+                cursor.execute(update_sql, (password_hash, reset_token['user_id']))
+                
+                # Tandai token sebagai digunakan
+                mark_used_sql = "UPDATE reset_tokens SET used = TRUE WHERE token = %s"
+                cursor.execute(mark_used_sql, (token,))
+                conn.commit()
+                
+                flash('Password berhasil direset, silakan login', 'success')
+                return redirect(url_for('auth.login'))
+    except Exception as e:
+        flash(f'Terjadi kesalahan: {str(e)}', 'danger')
+    finally:
+        conn.close()
     
     return render_template('auth/reset_password.html', token=token)

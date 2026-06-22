@@ -4,31 +4,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY')
-    if not SECRET_KEY:
-        raise ValueError("SECRET_KEY wajib diisi di .env")
-
-    # 1. Ambil URL Database
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-key-ganti-nanti')
     
-    if not SQLALCHEMY_DATABASE_URI:
+    # 1. Ambil URL Database (Raw string untuk parsing manual di backend)
+    DATABASE_URL = os.environ.get('DATABASE_URL')
+    
+    if not DATABASE_URL:
         raise ValueError("DATABASE_URL wajib diisi di .env")
 
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-
-    # 2. Konfigurasi SSL Khusus untuk TiDB Cloud via SQLAlchemy
-    # TiDB Cloud memerlukan SSL, jadi kita set ssl_require=True
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        "pool_pre_ping": True,
-        "connect_args": {
-            "ssl": {
-                "ca": None,
-                "check_hostname": False,
-                "verify_mode": 0  # CERT_NONE - disable verification for simplicity
-            }
-        }
-    }
-    
     # Konfigurasi lain
     CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL')
     RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
