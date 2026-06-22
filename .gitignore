@@ -1,22 +1,8 @@
 ```
-# Compiled Python files
-*.pyc
-__pycache__/
-
-# Dependencies
-.venv/
-venv/
-node_modules/
-
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-
-# Environment
+# Environment variables
 .env
 .env.local
-*.env.*
+.env.*
 
 # Editors
 .vscode/
@@ -31,6 +17,14 @@ env/
 venv/
 .venv/
 .ENV
+.python-version
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
 .ENV.local
 .env
 .env.local

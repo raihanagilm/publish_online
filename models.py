@@ -1,47 +1,41 @@
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+# Models untuk referensi struktur database saja
+# Tidak digunakan langsung karena kita pakai raw SQL dengan pymysql
 
-db = SQLAlchemy()
+class User:
+    """
+    Referensi struktur tabel users:
+    - id: INT PRIMARY KEY AUTO_INCREMENT
+    - username: VARCHAR(100) UNIQUE NOT NULL
+    - email: VARCHAR(120) UNIQUE NOT NULL
+    - password_hash: VARCHAR(256) NOT NULL
+    - role: ENUM('admin', 'karyawan') DEFAULT 'karyawan'
+    - nama_lengkap: VARCHAR(100)
+    - created_at: DATETIME
+    """
+    pass
 
-class User(db.Model):
-    __tablename__ = 'users'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    nama = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(db.Enum('admin', 'karyawan'), default='karyawan')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    absensi = db.relationship('Absensi', backref='karyawan', lazy=True)
-    
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-    
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+class Absensi:
+    """
+    Referensi struktur tabel absensi:
+    - id: INT PRIMARY KEY AUTO_INCREMENT
+    - user_id: INT FOREIGN KEY REFERENCES users(id)
+    - tanggal: DATE NOT NULL
+    - jam_masuk: TIME
+    - jam_keluar: TIME
+    - foto_masuk: VARCHAR(500)
+    - foto_keluar: VARCHAR(500)
+    - status: VARCHAR(20) DEFAULT 'hadir'
+    - created_at: DATETIME
+    """
+    pass
 
-class Absensi(db.Model):
-    __tablename__ = 'absensi'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    tanggal = db.Column(db.Date, nullable=False)
-    jam_masuk = db.Column(db.Time, nullable=True)
-    jam_keluar = db.Column(db.Time, nullable=True)
-    foto_masuk = db.Column(db.String(500), nullable=True)
-    foto_keluar = db.Column(db.String(500), nullable=True)
-    status = db.Column(db.String(20), default='hadir')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-class ResetToken(db.Model):
-    __tablename__ = 'reset_tokens'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    token = db.Column(db.String(100), unique=True, nullable=False)
-    expires_at = db.Column(db.DateTime, nullable=False)
-    used = db.Column(db.Boolean, default=False)
-    
-    user = db.relationship('User', backref=db.backref('reset_tokens', lazy=True))
+class ResetToken:
+    """
+    Referensi struktur tabel reset_tokens:
+    - id: INT PRIMARY KEY AUTO_INCREMENT
+    - user_id: INT FOREIGN KEY REFERENCES users(id)
+    - token: VARCHAR(100) UNIQUE NOT NULL
+    - expires_at: DATETIME NOT NULL
+    - used: BOOLEAN DEFAULT FALSE
+    """
+    pass
