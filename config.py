@@ -12,6 +12,9 @@ class Config:
     
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL wajib diisi di .env")
+    _database_url = urlparse(DATABASE_URL)
+    if _database_url.scheme.startswith('sqlite') or _database_url.hostname in {'localhost', '127.0.0.1'}:
+        raise ValueError("DATABASE_URL harus mengarah ke database online, bukan database lokal")
 
     # Konfigurasi Cloudinary. Bisa pakai CLOUDINARY_URL atau variabel terpisah.
     CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL')
