@@ -4,8 +4,6 @@ from config import Config
 from models import db, User
 import cloudinary
 import resend
-import ssl
-import pymysql
 
 # Import blueprints
 from backend.routes.auth import auth_bp
@@ -21,16 +19,6 @@ def create_app():
                 static_folder='../frontend/static',
                 template_folder='../frontend/templates')
     app.config.from_object(Config)
-    
-    # Setup SSL context untuk TiDB
-    ssl_ctx = ssl.create_default_context(cafile=Config.MYSQL_SSL_CA)
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
-    
-    # Simpan SSL context di config untuk digunakan oleh SQLAlchemy
-    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-        'connect_args': {'ssl': ssl_ctx}
-    }
     
     # Init extensions
     db.init_app(app)
