@@ -1,3 +1,40 @@
+// === UTILITY: HELPER apiFetch (semua request pakai ini) ===
+// Mengirim cookie session otomatis, menangani error JSON vs HTML
+async function apiFetch(url, opts = {}) {
+    const method = opts.method || 'GET';
+    const headers = opts.headers || {};
+    if (opts.body) {
+        headers['Content-Type'] = 'application/json';
+    }
+
+    const response = await fetch(url, {
+        method,
+        credentials: 'same-origin',  // kirim cookie session selalu
+        headers,
+        body: opts.body
+    });
+
+    // Cek apakah server mengembalikan JSON
+    const ct = response.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+        // Server mengembalikan HTML (mis: halaman login karena session habis)
+        if (response.status === 401 || response.redirected) {
+            window.location.href = '/';
+            return null;
+        }
+        throw new Error('Server tidak mengembalikan JSON. Status: ' + response.status);
+    }
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.error || data.message || 'Permintaan gagal (status ' + response.status + ')');
+    }
+
+    return data;
+}
+
+
 // === UTILITY: LIVE CLOCK ===
 function startLiveClock() {
     const clockEl = document.getElementById('live-clock');
@@ -46,7 +83,6 @@ function initMobileSidebar() {
         sidebar.classList.toggle('open');
     });
 
-    // Close sidebar when clicking outside on mobile
     document.addEventListener('click', (e) => {
         if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && e.target !== toggleBtn) {
             sidebar.classList.remove('open');
@@ -63,7 +99,6 @@ function initPhotoViewer() {
 
     if (!modal) return;
 
-    // Delegate click event for thumbnail images
     document.addEventListener('click', (e) => {
         if (e.target && e.target.classList.contains('img-thumb')) {
             modalImg.src = e.target.src;
@@ -72,7 +107,6 @@ function initPhotoViewer() {
         }
     });
 
-    // Close modal triggers
     const closeModalFunc = () => { modal.style.display = 'none'; };
     closeBtn.addEventListener('click', closeModalFunc);
     modal.addEventListener('click', (e) => {
@@ -83,10 +117,9 @@ function initPhotoViewer() {
 // === SESSION PROFILE SYNC & LOGOUT ===
 async function checkSession() {
     try {
-        const res = await fetch('/api/auth/me');
-        const data = await res.json();
+        const data = await apiFetch('/api/auth/me');
+        if (!data) return; // redirect sudah dilakukan di apiFetch
         
-        // Sync profile components on page if logged in
         if (data.logged_in) {
             const displayNameEls = document.querySelectorAll('#user-display-name');
             const displayRoleEls = document.querySelectorAll('#user-display-role');
@@ -99,7 +132,7 @@ async function checkSession() {
                 el.innerText = initial;
             });
             
-            // Redirect if user is on login page
+            // Redirect jika sudah login dan ada di halaman login
             if (document.body.classList.contains('login-page') && !document.getElementById('reset-password-form')) {
                 if (data.user.role === 'admin') {
                     window.location.href = '/admin/dashboard';
@@ -108,7 +141,7 @@ async function checkSession() {
                 }
             }
         } else {
-            // If not logged in and not on login or reset pages, redirect to login
+            // Tidak login & bukan di halaman login atau reset password
             if (!document.body.classList.contains('login-page')) {
                 window.location.href = '/';
             }
@@ -125,21 +158,10 @@ function initLogout() {
             e.preventDefault();
             if (confirm('Apakah Anda yakin ingin keluar?')) {
                 try {
-                    // Try POST logout first
-                    const res = await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
-                    // If POST fails (non-2xx), fallback to GET
-                    if (!res.ok) {
-                        await fetch('/api/auth/logout', { method: 'GET', credentials: 'same-origin' });
-                    }
+                    await apiFetch('/api/auth/logout', { method: 'POST' });
                 } catch (err) {
-                    // On network error, attempt GET logout as fallback
-                    try {
-                        await fetch('/api/auth/logout', { method: 'GET', credentials: 'same-origin' });
-                    } catch (fallbackErr) {
-                        console.error('Logout fallback failed:', fallbackErr);
-                    }
+                    console.error('Logout error:', err);
                 } finally {
-                    // Redirect to home page after attempting logout
                     window.location.href = '/';
                 }
             }
@@ -166,25 +188,17 @@ function initLoginPage() {
         const username = usernameInput.value.trim();
         const password = passwordInput.value;
 
-        // Reset
         errorEl.style.display = 'none';
         submitBtn.disabled = true;
         const originalText = submitBtn.innerHTML;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
 
         try {
-            const res = await fetch('/api/auth/login', {
+            const data = await apiFetch('/api/auth/login', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
             });
-            const data = await res.json();
 
-            if (!res.ok) {
-                throw new Error(data.error || 'Login gagal.');
-            }
-
-            // Redirect based on role
             if (data.user.role === 'admin') {
                 window.location.href = '/admin/dashboard';
             } else {
@@ -198,28 +212,26 @@ function initLoginPage() {
         }
     });
 
-    // Forgot Password Trigger
+    // Forgot Password
     const forgotLink = document.getElementById('link-lupa-password');
     if (forgotLink) {
         forgotLink.addEventListener('click', async (e) => {
             e.preventDefault();
             const email = prompt('Masukkan Email terdaftar Anda untuk mengirim link reset password:');
-            if (email === null) return; // cancelled
+            if (email === null) return;
             if (!email.trim()) {
                 alert('Email tidak boleh kosong!');
                 return;
             }
 
             try {
-                const res = await fetch('/api/auth/forgot-password', {
+                const data = await apiFetch('/api/auth/forgot-password', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email: email.trim() })
                 });
-                const data = await res.json();
                 alert(data.message);
             } catch (err) {
-                alert('Gagal mengirimkan permintaan reset password.');
+                alert('Gagal mengirimkan permintaan reset password: ' + err.message);
             }
         });
     }
@@ -233,7 +245,6 @@ function initResetPasswordPage() {
     const form = document.getElementById('reset-password-form');
     if (!form) return;
 
-    // Check token
     const token = new URLSearchParams(window.location.search).get('token');
     const errorEl = document.getElementById('error-msg');
     const successEl = document.getElementById('success-msg');
@@ -263,16 +274,10 @@ function initResetPasswordPage() {
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
 
         try {
-            const res = await fetch('/api/auth/reset-password', {
+            const data = await apiFetch('/api/auth/reset-password', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token, password: newPass })
             });
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Gagal reset password.');
-            }
 
             successEl.style.display = 'block';
             form.style.display = 'none';
@@ -294,9 +299,8 @@ function initResetPasswordPage() {
 // ==========================================
 async function loadAdminStats() {
     try {
-        const res = await fetch('/api/admin/stats');
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = await apiFetch('/api/admin/stats');
+        if (!data) return;
         
         document.getElementById('stat-total-karyawan').innerText = data.total_karyawan;
         document.getElementById('stat-hadir').innerText = data.hadir;
@@ -304,7 +308,7 @@ async function loadAdminStats() {
         document.getElementById('stat-izin').innerText = data.izin;
         document.getElementById('stat-alfa').innerText = data.alfa;
     } catch (err) {
-        console.error('Failed to load stats:', err);
+        console.error('Gagal memuat statistik:', err);
     }
 }
 
@@ -316,9 +320,8 @@ async function loadAdminLogs(dateStr = '') {
         let url = '/api/admin/logs';
         if (dateStr) url += `?tanggal=${dateStr}`;
 
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('Gagal memuat log');
-        const logs = await res.json();
+        const logs = await apiFetch(url);
+        if (!logs) return;
 
         if (logs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-light">Tidak ada log absensi untuk tanggal ini.</td></tr>';
@@ -356,16 +359,13 @@ async function loadAdminLogs(dateStr = '') {
 function initAdminDashboard() {
     if (!document.body.classList.contains('admin-dashboard')) return;
 
-    // Set default date input to today
     const dateInput = document.getElementById('filter-date');
     const today = new Date().toISOString().split('T')[0];
     dateInput.value = today;
 
-    // Load initial
     loadAdminStats();
     loadAdminLogs(today);
 
-    // Refresh logs on date change
     dateInput.addEventListener('change', () => {
         loadAdminLogs(dateInput.value);
     });
@@ -382,9 +382,9 @@ async function loadEmployees() {
     if (!tbody) return;
 
     try {
-        const res = await fetch('/api/admin/karyawan');
-        if (!res.ok) throw new Error('Gagal memuat data karyawan');
-        allEmployees = await res.json();
+        const data = await apiFetch('/api/admin/karyawan');
+        if (!data) return;
+        allEmployees = data;
 
         if (allEmployees.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-light">Belum ada karyawan terdaftar.</td></tr>';
@@ -422,7 +422,6 @@ async function loadEmployees() {
 function initAdminKaryawanCRUD() {
     if (!document.body.classList.contains('admin-karyawan')) return;
 
-    // Load data
     loadEmployees();
 
     const modal = document.getElementById('karyawan-modal');
@@ -451,14 +450,12 @@ function initAdminKaryawanCRUD() {
             inputNama.value = emp.nama_lengkap;
             inputUsername.value = emp.username;
             inputEmail.value = emp.email;
-            
             labelPassword.innerText = 'Password Baru (Opsional)';
             helpPassword.style.display = 'block';
             inputPassword.required = false;
         } else {
             modalTitle.innerText = 'Tambah Karyawan';
             inputId.value = '';
-            
             labelPassword.innerText = 'Password';
             helpPassword.style.display = 'none';
             inputPassword.required = true;
@@ -467,18 +464,13 @@ function initAdminKaryawanCRUD() {
         modal.style.display = 'flex';
     };
 
-    const closeModal = () => {
-        modal.style.display = 'none';
-    };
+    const closeModal = () => { modal.style.display = 'none'; };
 
     openAddModalBtn.addEventListener('click', () => openModal(false));
     closeBtn.addEventListener('click', closeModal);
     cancelBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
-    });
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
-    // Form Submission (Add or Update)
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         modalError.style.display = 'none';
@@ -496,17 +488,7 @@ function initAdminKaryawanCRUD() {
         const method = isEdit ? 'PUT' : 'POST';
 
         try {
-            const res = await fetch(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Operasi gagal.');
-            }
-
+            await apiFetch(url, { method, body: JSON.stringify(payload) });
             closeModal();
             loadEmployees();
         } catch (err) {
@@ -515,7 +497,6 @@ function initAdminKaryawanCRUD() {
         }
     });
 
-    // Delegate Edit/Delete clicks
     document.addEventListener('click', async (e) => {
         const btnEdit = e.target.closest('.btn-edit');
         const btnDelete = e.target.closest('.btn-delete');
@@ -530,11 +511,7 @@ function initAdminKaryawanCRUD() {
             const empId = parseInt(btnDelete.dataset.id);
             if (confirm('Apakah Anda yakin ingin menghapus karyawan ini? Seluruh riwayat absensi juga akan dihapus.')) {
                 try {
-                    const res = await fetch(`/api/admin/karyawan/${empId}`, { method: 'DELETE' });
-                    if (!res.ok) {
-                        const data = await res.json();
-                        throw new Error(data.error || 'Gagal menghapus karyawan');
-                    }
+                    await apiFetch(`/api/admin/karyawan/${empId}`, { method: 'DELETE' });
                     loadEmployees();
                 } catch (err) {
                     alert(err.message);
@@ -549,7 +526,7 @@ function initAdminKaryawanCRUD() {
 // 5. KARYAWAN ABSEN PORTAL CONTROLLER
 // ==========================================
 let activeStream = null;
-let currentAbsenType = 'masuk'; // 'masuk' or 'keluar'
+let currentAbsenType = 'masuk';
 
 async function checkKaryawanStatus() {
     if (!document.body.classList.contains('karyawan-absen')) return;
@@ -568,7 +545,6 @@ async function checkKaryawanStatus() {
     const btnKeluar = document.getElementById('btn-submit-keluar');
     const completeAlert = document.getElementById('msg-absen-complete');
 
-    // Default resets
     rowMasuk.style.display = 'none';
     rowKeluar.style.display = 'none';
     btnViewMasuk.style.display = 'none';
@@ -579,22 +555,17 @@ async function checkKaryawanStatus() {
     completeAlert.style.display = 'none';
 
     try {
-        const res = await fetch('/api/karyawan/status');
-        if (!res.ok) return;
-        const status = await res.json();
+        const status = await apiFetch('/api/karyawan/status');
+        if (!status) return;
 
-        // 1. Not checked in yet
         if (!status.checked_in) {
             badge.innerText = 'Belum Absen';
             badge.className = 'status-badge badge-neutral';
-            
             statusSelector.style.display = 'block';
             btnMasuk.style.display = 'block';
             currentAbsenType = 'masuk';
         }
-        // 2. Checked in but not check out
         else if (status.checked_in && !status.checked_out) {
-            // Check if status is sakit or izin (which means no checkout needed)
             if (status.status !== 'hadir') {
                 badge.innerText = status.status;
                 badge.className = `status-badge badge-${status.status}`;
@@ -619,7 +590,6 @@ async function checkKaryawanStatus() {
                 currentAbsenType = 'keluar';
             }
         }
-        // 3. Already check out
         else {
             badge.innerText = 'Absensi Lengkap';
             badge.className = 'status-badge badge-hadir';
@@ -651,7 +621,7 @@ async function checkKaryawanStatus() {
             completeAlert.style.display = 'block';
         }
     } catch (err) {
-        console.error('Failed checking attendance status:', err);
+        console.error('Gagal cek status absensi:', err);
     }
 }
 
@@ -694,17 +664,11 @@ function initWebcamAttendance() {
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: 'user',
-                    width: { ideal: 640 },
-                    height: { ideal: 480 }
-                },
+                video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
                 audio: false
             });
             activeStream = stream;
             video.srcObject = stream;
-            
-            // Wait for video load metadata to show it
             video.onloadedmetadata = () => {
                 camLoading.style.display = 'none';
                 video.style.display = 'block';
@@ -721,31 +685,21 @@ function initWebcamAttendance() {
         capturedBase64 = null;
     };
 
-    // Trigger Camera Modal or instant submit (for Sick/Permit)
     const handleAbsenMasukTrigger = async () => {
         const attendanceStatus = selectStatus.value;
         if (attendanceStatus === 'hadir') {
             cameraModal.style.display = 'flex';
             startWebcam();
         } else {
-            // Sick/Permit - direct submit
             if (confirm(`Apakah Anda yakin ingin mengajukan absen dengan status: ${attendanceStatus.toUpperCase()}?`)) {
                 try {
                     btnMasuk.disabled = true;
                     btnMasuk.innerText = 'Mengirim...';
                     
-                    const res = await fetch('/api/karyawan/absen', {
+                    const data = await apiFetch('/api/karyawan/absen', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            type: 'masuk',
-                            status: attendanceStatus,
-                            foto: null
-                        })
+                        body: JSON.stringify({ type: 'masuk', status: attendanceStatus, foto: null })
                     });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.error || 'Absen gagal');
-                    
                     alert(data.message);
                     checkKaryawanStatus();
                 } catch (err) {
@@ -766,43 +720,33 @@ function initWebcamAttendance() {
 
     closeCamBtn.addEventListener('click', closeCameraModalFunc);
 
-    // Capture Picture
     btnCapture.addEventListener('click', () => {
         if (!activeStream) return;
         
-        // Draw frame onto canvas
         const ctx = canvas.getContext('2d');
         canvas.width = video.videoWidth || 640;
         canvas.height = video.videoHeight || 480;
         
-        // Mirror context draw since video is mirrored
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
 
         capturedBase64 = canvas.toDataURL('image/jpeg', 0.85);
         
-        // Stop camera stream
         stopWebcam();
 
-        // Update preview source and display
         previewImg.src = capturedBase64;
         video.style.display = 'none';
         previewImg.style.display = 'block';
 
-        // Toggle button displays
         btnCapture.style.display = 'none';
         btnRetake.style.display = 'inline-flex';
         btnConfirm.style.display = 'inline-flex';
     });
 
-    // Retake Photo
-    btnRetake.addEventListener('click', () => {
-        startWebcam();
-    });
+    btnRetake.addEventListener('click', () => { startWebcam(); });
 
-    // Submit Captured Photo
     btnConfirm.addEventListener('click', async () => {
         if (!capturedBase64) return;
         
@@ -810,18 +754,14 @@ function initWebcamAttendance() {
         btnConfirm.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengirim...';
 
         try {
-            const res = await fetch('/api/karyawan/absen', {
+            const data = await apiFetch('/api/karyawan/absen', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     type: currentAbsenType,
                     status: currentAbsenType === 'masuk' ? selectStatus.value : 'hadir',
                     foto: capturedBase64
                 })
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Pengiriman absensi gagal.');
-
             alert(data.message);
             closeCameraModalFunc();
             checkKaryawanStatus();
@@ -843,9 +783,8 @@ async function loadKaryawanHistory(bulan, tahun) {
     if (!tbody) return;
 
     try {
-        const res = await fetch(`/api/karyawan/history?bulan=${bulan}&tahun=${tahun}`);
-        if (!res.ok) throw new Error('Gagal memuat riwayat');
-        const history = await res.json();
+        const history = await apiFetch(`/api/karyawan/history?bulan=${bulan}&tahun=${tahun}`);
+        if (!history) return;
 
         if (history.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-light">Tidak ada data absensi pada periode ini.</td></tr>';
@@ -888,10 +827,9 @@ function initKaryawanHistory() {
     const applyBtn = document.getElementById('btn-apply-filters');
 
     const now = new Date();
-    const currentMonth = now.getMonth() + 1; // 1-indexed
+    const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
 
-    // Populate Year dropdown (current year down to 5 years ago)
     selectTahun.innerHTML = '';
     for (let yr = currentYear; yr >= currentYear - 5; yr--) {
         const opt = document.createElement('option');
@@ -900,14 +838,11 @@ function initKaryawanHistory() {
         selectTahun.appendChild(opt);
     }
 
-    // Set selectors default
     selectBulan.value = currentMonth;
     selectTahun.value = currentYear;
 
-    // Load initial
     loadKaryawanHistory(currentMonth, currentYear);
 
-    // Apply filter trigger
     applyBtn.addEventListener('click', () => {
         loadKaryawanHistory(selectBulan.value, selectTahun.value);
     });
@@ -918,16 +853,13 @@ function initKaryawanHistory() {
 // DOM CONTENT LOADED - APPLICATION ROUTER
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Check Session & Guards (Excluding specific public assets inside login)
     checkSession();
     
-    // 2. Global Utilities
     startLiveClock();
     initMobileSidebar();
     initPhotoViewer();
     initLogout();
 
-    // 3. Controller Handlers
     initLoginPage();
     initResetPasswordPage();
     initAdminDashboard();
