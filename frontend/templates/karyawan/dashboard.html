@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Karyawan - Absensi Kantor{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4">Dashboard Absensi</h2>
+    </div>
+    
+    <!-- Card Status Hari Ini -->
+    <div class="col-12 col-md-6 col-lg-4 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">Status Hari Ini</h5>
+                <p class="text-muted">{{ today.strftime('%A, %d %B %Y') }}</p>
+                
+                {% if absensi_hari_ini %}
+                    {% if absensi_hari_ini.jam_masuk and absensi_hari_ini.jam_keluar %}
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill"></i><br>
+                        Sudah Absen Masuk & Keluar
+                    </div>
+                    {% elif absensi_hari_ini.jam_masuk %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-clock-fill"></i><br>
+                        Sudah Absen Masuk<br>
+                        <small>Belum Absen Keluar</small>
+                    </div>
+                    {% endif %}
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill"></i><br>
+                    Belum Absen Hari Ini
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Card Absen Masuk/Keluar -->
+    <div class="col-12 col-md-6 col-lg-8 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h5 class="card-title mb-4">Absensi Harian</h5>
+                
+                <div class="row g-3">
+                    <div class="col-12 col-sm-6">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="bi bi-box-arrow-in-right text-success fs-1"></i>
+                                <h6 class="mt-2">Absen Masuk</h6>
+                                {% if absensi_hari_ini and absensi_hari_ini.jam_masuk %}
+                                <p class="text-success fw-bold">
+                                    {{ absensi_hari_ini.jam_masuk.strftime('%H:%M:%S') }}
+                                </p>
+                                {% else %}
+                                <button class="btn btn-success w-100 mt-2" data-bs-toggle="modal" data-bs-target="#modalAbsenMasuk">
+                                    Absen Masuk
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12 col-sm-6">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="bi bi-box-arrow-left text-danger fs-1"></i>
+                                <h6 class="mt-2">Absen Keluar</h6>
+                                {% if absensi_hari_ini and absensi_hari_ini.jam_keluar %}
+                                <p class="text-danger fw-bold">
+                                    {{ absensi_hari_ini.jam_keluar.strftime('%H:%M:%S') }}
+                                </p>
+                                {% elif absensi_hari_ini and absensi_hari_ini.jam_masuk %}
+                                <button class="btn btn-danger w-100 mt-2" data-bs-toggle="modal" data-bs-target="#modalAbsenKeluar">
+                                    Absen Keluar
+                                </button>
+                                {% else %}
+                                <button class="btn btn-danger w-100 mt-2" disabled>
+                                    Absen Masuk Dulu
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Riwayat 10 Hari Terakhir -->
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">Riwayat 10 Hari Terakhir</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Jam Masuk</th>
+                                <th>Jam Keluar</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for absen in riwayat %}
+                            <tr>
+                                <td>{{ absen.tanggal.strftime('%d %B %Y') }}</td>
+                                <td>
+                                    {% if absen.jam_masuk %}
+                                        {{ absen.jam_masuk.strftime('%H:%M:%S') }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if absen.jam_keluar %}
+                                        {{ absen.jam_keluar.strftime('%H:%M:%S') }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if absen.status == 'hadir' else 'warning' }}">
+                                        {{ absen.status|capitalize }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">
+                                    Belum ada riwayat absensi
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer text-end">
+                <a href="{{ url_for('karyawan.riwayat') }}" class="btn btn-sm btn-outline-primary">
+                    Lihat Semua Riwayat <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Absen Masuk -->
+<div class="modal fade" id="modalAbsenMasuk" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Absen Masuk</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Silakan ambil foto selfie untuk absen masuk:</p>
+                <video id="videoMasuk" class="w-100 rounded mb-3" autoplay playsinline></video>
+                <canvas id="canvasMasuk" class="d-none"></canvas>
+                <img id="previewMasuk" class="img-fluid rounded mb-3 d-none" alt="Preview">
+                <input type="file" id="fotoMasuk" class="form-control mb-2" accept="image/*" capture="user">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-success" id="btnAmbilFotoMasuk">
+                    <i class="bi bi-camera"></i> Ambil Foto
+                </button>
+                <button type="button" class="btn btn-primary" id="btnKirimAbsenMasuk">
+                    <i class="bi bi-send"></i> Kirim Absen
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Absen Keluar -->
+<div class="modal fade" id="modalAbsenKeluar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Absen Keluar</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Silakan ambil foto selfie untuk absen keluar:</p>
+                <video id="videoKeluar" class="w-100 rounded mb-3" autoplay playsinline></video>
+                <canvas id="canvasKeluar" class="d-none"></canvas>
+                <img id="previewKeluar" class="img-fluid rounded mb-3 d-none" alt="Preview">
+                <input type="file" id="fotoKeluar" class="form-control mb-2" accept="image/*" capture="user">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-success" id="btnAmbilFotoKeluar">
+                    <i class="bi bi-camera"></i> Ambil Foto
+                </button>
+                <button type="button" class="btn btn-danger" id="btnKirimAbsenKeluar">
+                    <i class="bi bi-send"></i> Kirim Absen
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/absensi.js') }}"></script>
+{% endblock %}
