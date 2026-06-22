@@ -4,6 +4,7 @@ import json
 from datetime import datetime, date, timedelta
 from functools import wraps
 from flask import Blueprint, request, jsonify, session, send_from_directory, current_app, redirect
+from werkzeug.exceptions import HTTPException
 from config import Config
 from backend.models import db, User, ResetToken, Absensi
 
@@ -49,6 +50,21 @@ def upload_foto(base64_str, folder='absensi'):
         return None
 
 bp = Blueprint('main', __name__)
+
+
+@bp.app_errorhandler(HTTPException)
+def handle_http_exception(error):
+    if request.path.startswith('/api/'):
+        return jsonify({'error': error.description or error.name}), error.code
+    return error
+
+
+@bp.app_errorhandler(Exception)
+def handle_unexpected_exception(error):
+    if request.path.startswith('/api/'):
+        current_app.logger.exception(error)
+        return jsonify({'error': 'Terjadi kesalahan server. Silakan coba lagi.'}), 500
+    raise error
 
 # === MIDDLEWARE / DECORATORS ===
 def login_required(f):

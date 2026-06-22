@@ -2,6 +2,11 @@ from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
+try:
+    import bcrypt
+except ImportError:
+    bcrypt = None
+
 db = SQLAlchemy()
 
 class User(db.Model):
@@ -23,7 +28,21 @@ class User(db.Model):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        if not self.password_hash:
+            return False
+
+        if self.password_hash.startswith(('$2a$', '$2b$', '$2y$')):
+            if bcrypt is None:
+                return False
+            try:
+                return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
+            except (TypeError, ValueError):
+                return False
+
+        try:
+            return check_password_hash(self.password_hash, password)
+        except (TypeError, ValueError):
+            return False
 
     def to_dict(self):
         return {
