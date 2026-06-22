@@ -1,1 +1,75 @@
 (empty)
+```
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
+*.obj
+*.so
+*.dll
+*.exe
+*.class
+*.out
+
+# Dependencies
+.venv/
+venv/
+Nothing should be ignored in this case, as only source code files (`app.py`, `config.py`) were modified and there are no build artifacts, dependencies, or temporary files in the changes.
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+server.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Build directories
+# Dependencies
+venv/
+.venv/
+node_modules/
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Editors
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# Cache directories
+.mypy_cache/
+.pytest_cache/
+.gradle/
+node_modules/
+```
+# OS
+.DS_Store
+Thumbs.db
+.env
+
+```
