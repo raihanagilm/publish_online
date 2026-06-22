@@ -33,38 +33,22 @@ except Exception as _e:
 
 
 def upload_foto(base64_str, folder='absensi'):
-    """Upload foto base64 ke Cloudinary. Fallback ke lokal jika tidak tersedia."""
-    if _cloudinary_configured:
-        try:
-            # Cloudinary menerima base64 data URI langsung
-            result = cloudinary.uploader.upload(
-                base64_str,
-                folder=folder,
-                resource_type='image',
-                overwrite=True
-            )
-            return result.get('secure_url')
-        except Exception as e:
-            print(f'[ERROR] Cloudinary upload gagal: {e}')
+    """Upload foto base64 ke Cloudinary. Hanya menggunakan Cloudinary, tanpa fallback lokal."""
+    if not _cloudinary_configured:
+        print('[ERROR] Cloudinary tidak dikonfigurasi. Upload foto tidak dapat dilakukan.')
+        return None
     
-    # Fallback: simpan lokal
     try:
-        from flask import current_app
-        uploads_dir = os.path.join(current_app.static_folder, 'uploads')
-        os.makedirs(uploads_dir, exist_ok=True)
-        
-        if ',' in base64_str:
-            _, b64 = base64_str.split(',', 1)
-        else:
-            b64 = base64_str
-        
-        filename = f"foto_{uuid.uuid4().hex[:12]}.jpg"
-        filepath = os.path.join(uploads_dir, filename)
-        with open(filepath, 'wb') as f:
-            f.write(base64.b64decode(b64))
-        return f'/uploads/{filename}'
+        # Cloudinary menerima base64 data URI langsung
+        result = cloudinary.uploader.upload(
+            base64_str,
+            folder=folder,
+            resource_type='image',
+            overwrite=True
+        )
+        return result.get('secure_url')
     except Exception as e:
-        print(f'[ERROR] Simpan lokal juga gagal: {e}')
+        print(f'[ERROR] Cloudinary upload gagal: {e}')
         return None
 
 bp = Blueprint('main', __name__)
