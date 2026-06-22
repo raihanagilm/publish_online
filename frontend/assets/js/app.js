@@ -177,11 +177,22 @@ function initLoginPage() {
     const loginForm = document.getElementById('login-form');
     if (!loginForm) return;
 
+    const passwordInput = document.getElementById('input-password');
+    const togglePassword = document.getElementById('toggle-password');
+    if (passwordInput && togglePassword) {
+        togglePassword.addEventListener('click', () => {
+            const showPassword = passwordInput.type === 'password';
+            passwordInput.type = showPassword ? 'text' : 'password';
+            togglePassword.setAttribute('aria-pressed', String(showPassword));
+            togglePassword.setAttribute('aria-label', showPassword ? 'Sembunyikan password' : 'Tampilkan password');
+            togglePassword.innerHTML = showPassword ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
+        });
+    }
+
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
         const usernameInput = document.getElementById('input-username');
-        const passwordInput = document.getElementById('input-password');
         const errorEl = document.getElementById('error-msg');
         const submitBtn = document.getElementById('btn-login');
 
