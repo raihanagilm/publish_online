@@ -5,3 +5,4 @@ certifi
 pymysql
 cloudinary
 bcrypt
+resend

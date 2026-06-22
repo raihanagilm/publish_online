@@ -1,6 +1,4 @@
 import uuid
-import urllib.request
-import json
 from datetime import datetime, date, timedelta
 from functools import wraps
 from flask import Blueprint, request, jsonify, session, send_from_directory, current_app, redirect
@@ -103,12 +101,10 @@ def send_reset_email(email, reset_link):
         return False
 
     try:
-        url = "https://api.resend.com/emails"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        data = {
+        import resend
+
+        resend.api_key = api_key
+        result = resend.Emails.send({
             "from": Config.EMAIL_FROM,
             "to": [email],
             "subject": "Reset Password - Sistem Absensi",
@@ -124,15 +120,8 @@ def send_reset_email(email, reset_link):
                 <p style="color: #6b7280; font-size: 13px;">Link ini hanya berlaku selama 1 jam.</p>
             </div>
             """
-        }
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(data).encode('utf-8'),
-            headers=headers,
-            method='POST'
-        )
-        with urllib.request.urlopen(req, timeout=5) as response:
-            return response.getcode() in (200, 201, 202)
+        })
+        return bool(result.get('id'))
     except Exception as e:
         print(f"Failed to send email via Resend: {e}")
         return False
