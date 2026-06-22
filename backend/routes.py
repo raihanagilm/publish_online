@@ -16,8 +16,9 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
+            # API route → selalu kembalikan JSON 401, jangan redirect ke HTML
             if request.path.startswith('/api/'):
-                return jsonify({'error': 'Silakan login terlebih dahulu'}), 401
+                return jsonify({'error': 'Silakan login terlebih dahulu', 'logged_in': False}), 401
             return redirect('/')
         return f(*args, **kwargs)
     return decorated_function
@@ -26,9 +27,13 @@ def role_required(role):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            if 'user_id' not in session or session.get('role') != role:
+            if 'user_id' not in session:
                 if request.path.startswith('/api/'):
-                    return jsonify({'error': 'Akses ditolak'}), 403
+                    return jsonify({'error': 'Silakan login terlebih dahulu', 'logged_in': False}), 401
+                return redirect('/')
+            if session.get('role') != role:
+                if request.path.startswith('/api/'):
+                    return jsonify({'error': 'Akses ditolak. Role tidak sesuai.'}), 403
                 return redirect('/')
             return f(*args, **kwargs)
         return decorated_function
@@ -59,13 +64,12 @@ def send_reset_email(email, reset_link):
             <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
                 <h2 style="color: #dc2626; border-bottom: 2px solid #dc2626; padding-bottom: 10px;">Reset Password</h2>
                 <p>Halo,</p>
-                <p>Kami menerima permintaan untuk mereset password akun Absensi Anda. Silakan klik tombol di bawah ini untuk memperbarui password Anda:</p>
+                <p>Kami menerima permintaan untuk mereset password akun Absensi Anda. Silakan klik tombol di bawah ini:</p>
                 <div style="text-align: center; margin: 30px 0;">
                     <a href="{reset_link}" style="background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 6px; display: inline-block;">Reset Password</a>
                 </div>
-                <p>Atau copy dan paste link berikut di browser Anda:</p>
-                <p style="word-break: break-all;"><a href="{reset_link}">{reset_link}</a></p>
-                <p style="color: #6b7280; font-size: 13px;">Link ini hanya berlaku selama 1 jam. Jika Anda tidak merasa melakukan permintaan ini, silakan abaikan email ini.</p>
+                <p>Atau copy link berikut: <a href="{reset_link}">{reset_link}</a></p>
+                <p style="color: #6b7280; font-size: 13px;">Link ini hanya berlaku selama 1 jam.</p>
             </div>
             """
         }
@@ -126,7 +130,6 @@ def api_login():
     if not username_or_email or not password:
         return jsonify({'error': 'Username/Email dan Password wajib diisi'}), 400
 
-    # Find user (match by username or email)
     user = User.query.filter(
         (User.username == username_or_email) | (User.email == username_or_email)
     ).first()
@@ -134,7 +137,6 @@ def api_login():
     if not user or not user.check_password(password):
         return jsonify({'error': 'Username atau Password salah'}), 401
 
-    # Save to session
     session['user_id'] = user.id
     session['username'] = user.username
     session['role'] = user.role
@@ -175,23 +177,18 @@ def api_forgot_password():
 
     user = User.query.filter_by(email=email).first()
     
-    # Security note: return success even if user not found to prevent user enumeration
     if user:
-        # Create token
         token = uuid.uuid4().hex
         expires_at = datetime.utcnow() + timedelta(hours=1)
         
-        # Save token
         reset_token = ResetToken(user_id=user.id, token=token, expires_at=expires_at)
         db.session.add(reset_token)
         db.session.commit()
 
-        # Send email
         reset_link = f"{Config.FRONTEND_URL.rstrip('/')}/reset-password?token={token}"
         sent = send_reset_email(email, reset_link)
         
         if not sent:
-            # If not sent but logged in terminal, return details for easier dev testing
             return jsonify({
                 'message': 'Link reset password berhasil dibuat (cek log server)',
                 'dev_mode': True
@@ -216,7 +213,6 @@ def api_reset_password():
     if not user:
         return jsonify({'error': 'User tidak ditemukan'}), 404
 
-    # Update password
     user.set_password(new_password)
     reset_token.used = True
     db.session.commit()
@@ -253,21 +249,19 @@ def karyawan_absen_post():
     now_time = datetime.now().time()
     
     data = request.get_json() or {}
-    absen_type = data.get('type')  # 'masuk' or 'keluar'
-    status = data.get('status', 'hadir')  # 'hadir', 'sakit', 'izin'
-    foto_base64 = data.get('foto')  # base64 string
+    absen_type = data.get('type')       # 'masuk' or 'keluar'
+    status = data.get('status', 'hadir')
+    foto_base64 = data.get('foto')
 
     if absen_type not in ['masuk', 'keluar']:
         return jsonify({'error': 'Tipe absensi tidak valid'}), 400
 
-    # Ensure upload directory
     uploads_dir = os.path.join(current_app.static_folder, 'uploads')
+    os.makedirs(uploads_dir, exist_ok=True)
     
-    # Handle Photo upload if present (mandatory for 'hadir' status)
     foto_url = None
     if foto_base64 and status == 'hadir':
         try:
-            # Extract base64 payload
             if ',' in foto_base64:
                 header, base64_str = foto_base64.split(',', 1)
             else:
@@ -286,7 +280,6 @@ def karyawan_absen_post():
     elif status == 'hadir':
         return jsonify({'error': 'Foto wajah wajib diambil untuk status hadir'}), 400
 
-    # Query existing record
     absensi = Absensi.query.filter_by(user_id=user_id, tanggal=today).first()
 
     if absen_type == 'masuk':
@@ -302,7 +295,6 @@ def karyawan_absen_post():
             absensi.jam_masuk = now_time
             absensi.foto_masuk = foto_url
         else:
-            # Sick or Permit
             absensi.jam_masuk = None
             absensi.foto_masuk = None
             
@@ -310,7 +302,7 @@ def karyawan_absen_post():
         db.session.commit()
         return jsonify({'message': f'Absen masuk ({status}) berhasil dicatat', 'data': absensi.to_dict(False)})
 
-    else: # keluar
+    else:  # keluar
         if not absensi:
             return jsonify({'error': 'Anda harus melakukan absen masuk terlebih dahulu'}), 400
         if absensi.status != 'hadir':
@@ -332,7 +324,6 @@ def karyawan_history():
 
     query = Absensi.query.filter_by(user_id=user_id)
 
-    # Apply date filters
     if bulan and tahun:
         start_date = date(tahun, bulan, 1)
         if bulan == 12:
@@ -341,7 +332,6 @@ def karyawan_history():
             end_date = date(tahun, bulan + 1, 1) - timedelta(days=1)
         query = query.filter(Absensi.tanggal.between(start_date, end_date))
 
-    # Sort descending
     history = query.order_by(Absensi.tanggal.desc()).all()
     return jsonify([item.to_dict(False) for item in history])
 
@@ -352,18 +342,13 @@ def karyawan_history():
 def admin_stats():
     today = date.today()
     
-    # Counts
     total_karyawan = User.query.filter_by(role='karyawan').count()
-    
     today_absensi = Absensi.query.filter_by(tanggal=today).all()
     
     hadir_count = sum(1 for a in today_absensi if a.status == 'hadir')
     sakit_count = sum(1 for a in today_absensi if a.status == 'sakit')
     izin_count = sum(1 for a in today_absensi if a.status == 'izin')
-    
-    alfa_count = total_karyawan - (hadir_count + sakit_count + izin_count)
-    if alfa_count < 0:
-        alfa_count = 0
+    alfa_count = max(0, total_karyawan - (hadir_count + sakit_count + izin_count))
 
     return jsonify({
         'total_karyawan': total_karyawan,
@@ -376,7 +361,6 @@ def admin_stats():
 @bp.route('/api/admin/logs', methods=['GET'])
 @role_required('admin')
 def admin_logs():
-    # Filter logs for today or a specific date
     tanggal_str = request.args.get('tanggal')
     if tanggal_str:
         try:
@@ -387,7 +371,6 @@ def admin_logs():
         tanggal = date.today()
 
     logs = Absensi.query.filter_by(tanggal=tanggal).all()
-    # Sort by creation time desc (newest updates first)
     logs_sorted = sorted(logs, key=lambda x: x.created_at, reverse=True)
     return jsonify([log.to_dict(include_user=True) for log in logs_sorted])
 
@@ -395,11 +378,9 @@ def admin_logs():
 @role_required('admin')
 def admin_karyawan_list_create():
     if request.method == 'GET':
-        # Get all users with role karyawan
         karyawans = User.query.filter_by(role='karyawan').order_by(User.id.desc()).all()
         return jsonify([k.to_dict() for k in karyawans])
     
-    # POST - Create new employee
     data = request.get_json() or {}
     username = data.get('username', '').strip()
     email = data.get('email', '').strip()
@@ -409,18 +390,12 @@ def admin_karyawan_list_create():
     if not username or not email or not password or not nama_lengkap:
         return jsonify({'error': 'Semua field wajib diisi'}), 400
 
-    # Check unique
     if User.query.filter_by(username=username).first():
         return jsonify({'error': 'Username sudah digunakan'}), 400
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email sudah digunakan'}), 400
 
-    new_user = User(
-        username=username,
-        email=email,
-        nama_lengkap=nama_lengkap,
-        role='karyawan'
-    )
+    new_user = User(username=username, email=email, nama_lengkap=nama_lengkap, role='karyawan')
     new_user.set_password(password)
     
     db.session.add(new_user)
@@ -448,7 +423,6 @@ def admin_karyawan_update_delete(user_id):
         if not username or not email or not nama_lengkap:
             return jsonify({'error': 'Username, email, dan nama lengkap wajib diisi'}), 400
 
-        # Check unique if changed
         if username != user.username and User.query.filter_by(username=username).first():
             return jsonify({'error': 'Username sudah digunakan'}), 400
         if email != user.email and User.query.filter_by(email=email).first():
@@ -461,10 +435,7 @@ def admin_karyawan_update_delete(user_id):
             user.set_password(password)
 
         db.session.commit()
-        return jsonify({
-            'message': 'Karyawan berhasil diperbarui',
-            'user': user.to_dict()
-        })
+        return jsonify({'message': 'Karyawan berhasil diperbarui', 'user': user.to_dict()})
 
     # DELETE
     db.session.delete(user)
