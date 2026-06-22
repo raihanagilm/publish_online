@@ -83,12 +83,9 @@ def role_required(role):
 def send_reset_email(email, reset_link):
     api_key = Config.RESEND_API_KEY
     if not api_key:
-        print("\n" + "="*50)
-        print(f"=== RESET PASSWORD LINK FOR {email} ===")
-        print(reset_link)
-        print("="*50 + "\n")
+        print('[ERROR] RESEND_API_KEY belum diatur. Email reset password tidak dikirim.')
         return False
-        
+
     try:
         url = "https://api.resend.com/emails"
         headers = {
@@ -119,7 +116,7 @@ def send_reset_email(email, reset_link):
             method='POST'
         )
         with urllib.request.urlopen(req, timeout=5) as response:
-            return response.getcode() == 200
+            return response.getcode() in (200, 201, 202)
     except Exception as e:
         print(f"Failed to send email via Resend: {e}")
         return False
@@ -228,10 +225,9 @@ def api_forgot_password():
         sent = send_reset_email(email, reset_link)
         
         if not sent:
-            return jsonify({
-                'message': 'Link reset password berhasil dibuat (cek log server)',
-                'dev_mode': True
-            })
+            db.session.delete(reset_token)
+            db.session.commit()
+            return jsonify({'error': 'Gagal mengirim email reset password. Periksa konfigurasi Resend.'}), 500
 
     return jsonify({'message': 'Jika email terdaftar, instruksi reset password telah dikirim.'})
 

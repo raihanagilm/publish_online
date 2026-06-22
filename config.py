@@ -34,3 +34,6 @@ class Config:
     RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
     EMAIL_FROM = os.environ.get('EMAIL_FROM', 'Absensi Kantor <onboarding@resend.dev>')
     FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5000')
+
+    if RESEND_API_KEY and not RESEND_API_KEY.startswith('re_'):
+        raise ValueError("RESEND_API_KEY tidak valid. API key Resend biasanya diawali dengan 're_'")
