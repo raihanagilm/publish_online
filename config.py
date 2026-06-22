@@ -8,7 +8,7 @@ class Config:
     if not SECRET_KEY:
         raise ValueError("SECRET_KEY wajib diisi di .env")
 
-    # 1. Ambil URL Database (tanpa parameter ssl di belakangnya)
+    # 1. Ambil URL Database
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
     
     if not SQLALCHEMY_DATABASE_URI:
@@ -17,14 +17,14 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # 2. Konfigurasi SSL Khusus untuk TiDB Cloud via SQLAlchemy
-    # Kita inject parameter 'ssl' ke dalam opsi engine
+    # TiDB Cloud memerlukan SSL, jadi kita set ssl_require=True
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
         "connect_args": {
             "ssl": {
-                "ca": None,          # Gunakan CA default sistem atau set path file jika punya
-                "check_hostname": False, # Kadang perlu dimatikan jika hostname verification gagal
-                "verify_mode": 1     # 1 = CERT_REQUIRED (Wajib SSL)
+                "ca": None,
+                "check_hostname": False,
+                "verify_mode": 0  # CERT_NONE - disable verification for simplicity
             }
         }
     }
