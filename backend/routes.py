@@ -3,11 +3,69 @@ import base64
 import uuid
 import urllib.request
 import json
+import io
 from datetime import datetime, date, timedelta
 from functools import wraps
 from flask import Blueprint, request, jsonify, session, send_from_directory, current_app, redirect
 from config import Config
 from backend.models import db, User, ResetToken, Absensi
+
+# === CLOUDINARY SETUP ===
+_cloudinary_configured = False
+try:
+    import cloudinary
+    import cloudinary.uploader
+    _cloud_name = Config.CLOUDINARY_CLOUD_NAME
+    _api_key = Config.CLOUDINARY_API_KEY
+    _api_secret = Config.CLOUDINARY_API_SECRET
+    if _cloud_name and _api_key and _api_secret:
+        cloudinary.config(
+            cloud_name=_cloud_name,
+            api_key=_api_key,
+            api_secret=_api_secret
+        )
+        _cloudinary_configured = True
+        print('[INFO] Cloudinary berhasil dikonfigurasi.')
+    else:
+        print('[WARN] Konfigurasi Cloudinary tidak lengkap, foto disimpan lokal.')
+except Exception as _e:
+    print(f'[WARN] Cloudinary tidak tersedia: {_e}. Foto disimpan lokal.')
+
+
+def upload_foto(base64_str, folder='absensi'):
+    """Upload foto base64 ke Cloudinary. Fallback ke lokal jika tidak tersedia."""
+    if _cloudinary_configured:
+        try:
+            # Cloudinary menerima base64 data URI langsung
+            result = cloudinary.uploader.upload(
+                base64_str,
+                folder=folder,
+                resource_type='image',
+                overwrite=True
+            )
+            return result.get('secure_url')
+        except Exception as e:
+            print(f'[ERROR] Cloudinary upload gagal: {e}')
+    
+    # Fallback: simpan lokal
+    try:
+        from flask import current_app
+        uploads_dir = os.path.join(current_app.static_folder, 'uploads')
+        os.makedirs(uploads_dir, exist_ok=True)
+        
+        if ',' in base64_str:
+            _, b64 = base64_str.split(',', 1)
+        else:
+            b64 = base64_str
+        
+        filename = f"foto_{uuid.uuid4().hex[:12]}.jpg"
+        filepath = os.path.join(uploads_dir, filename)
+        with open(filepath, 'wb') as f:
+            f.write(base64.b64decode(b64))
+        return f'/uploads/{filename}'
+    except Exception as e:
+        print(f'[ERROR] Simpan lokal juga gagal: {e}')
+        return None
 
 bp = Blueprint('main', __name__)
 
@@ -256,27 +314,11 @@ def karyawan_absen_post():
     if absen_type not in ['masuk', 'keluar']:
         return jsonify({'error': 'Tipe absensi tidak valid'}), 400
 
-    uploads_dir = os.path.join(current_app.static_folder, 'uploads')
-    os.makedirs(uploads_dir, exist_ok=True)
-    
     foto_url = None
     if foto_base64 and status == 'hadir':
-        try:
-            if ',' in foto_base64:
-                header, base64_str = foto_base64.split(',', 1)
-            else:
-                base64_str = foto_base64
-
-            image_bytes = base64.b64decode(base64_str)
-            filename = f"{user_id}_{today.strftime('%Y%m%d')}_{absen_type}_{uuid.uuid4().hex[:8]}.jpg"
-            filepath = os.path.join(uploads_dir, filename)
-            
-            with open(filepath, 'wb') as f:
-                f.write(image_bytes)
-            
-            foto_url = f"/uploads/{filename}"
-        except Exception as e:
-            return jsonify({'error': f'Gagal memproses foto: {str(e)}'}), 400
+        foto_url = upload_foto(foto_base64, folder='absensi')
+        if not foto_url:
+            return jsonify({'error': 'Gagal mengupload foto. Coba lagi.'}), 500
     elif status == 'hadir':
         return jsonify({'error': 'Foto wajah wajib diambil untuk status hadir'}), 400
 

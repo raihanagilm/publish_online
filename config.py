@@ -12,8 +12,10 @@ class Config:
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL wajib diisi di .env")
 
-    # Konfigurasi lain
-    CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL')
+    # Konfigurasi Cloudinary (pisah agar lebih kompatibel)
+    CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', 'dxvryfbpz')
+    CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '623194896736331')
+    CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', 'Zm1kpsnA3ewRG4JnhgI_v-NrPAo')
     RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
     EMAIL_FROM = os.environ.get('EMAIL_FROM', 'Absensi Kantor <onboarding@resend.dev>')
     FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5000')

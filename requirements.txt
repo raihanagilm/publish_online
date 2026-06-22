@@ -1,7 +1,6 @@
 Flask
 python-dotenv
 Flask-SQLAlchemy
-SQLAlchemy
-pymysql
 certifi
-werkzeug
+pymysql
+cloudinary
