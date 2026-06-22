@@ -13,13 +13,9 @@ class Config:
     db_port = "4000"
     db_name = "Absensi"
     
-    SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
+    # URI Database dengan parameter SSL untuk PyMySQL
+    SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}?ssl_ca=/etc/ssl/certs/ca-certificates.crt&ssl_verify_cert=true"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    
-    # Konfigurasi SSL untuk PyMySQL
-    MYSQL_SSL_CA = '/etc/ssl/certs/ca-certificates.crt'
-    MYSQL_SSL_CERT = None
-    MYSQL_SSL_KEY = None
     
     # Cloudinary
     CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL', 'cloudinary://884765233771594:qOYvn2w1TsW_ipwEzhgqB8RRTKE@daknwopl3')
