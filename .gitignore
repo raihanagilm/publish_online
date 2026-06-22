@@ -21,9 +21,26 @@ node_modules/
 # Editors
 .vscode/
 .idea/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.ENV
+.ENV.local
+.env
+.env.local
+.env.*
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage/
 
 # Build artifacts
-dist/
 build/
 target/
 *.class
@@ -34,6 +51,12 @@ target/
 *.so
 *.a
 *.out
+
+dist/
+*.egg-info/
+
+# Logs
+*.log
 
 # OS generated files
 .DS_Store
@@ -47,6 +70,14 @@ htmlcov/
 .pytest_cache/
 
 # Compression archives
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Compressed files
 *.zip
 *.gz
 *.tar
