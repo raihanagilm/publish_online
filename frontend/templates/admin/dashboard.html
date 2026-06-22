@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Admin - Absensi Kantor{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4">Dashboard Admin</h2>
+    </div>
+    
+    <!-- Statistik -->
+    <div class="col-12 col-md-6 col-lg-3 mb-4">
+        <div class="card shadow-sm bg-primary text-white h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-people-fill fs-1"></i>
+                <h3 class="mt-2">{{ total_karyawan }}</h3>
+                <p class="mb-0">Total Karyawan</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12 col-md-6 col-lg-3 mb-4">
+        <div class="card shadow-sm bg-success text-white h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-check-circle-fill fs-1"></i>
+                <h3 class="mt-2">{{ absen_hari_ini }}</h3>
+                <p class="mb-0">Hadir Hari Ini</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12 col-md-6 col-lg-3 mb-4">
+        <div class="card shadow-sm bg-warning text-dark h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-clock-fill fs-1"></i>
+                <h3 class="mt-2">{{ total_karyawan - absen_hari_ini }}</h3>
+                <p class="mb-0">Belum Hadir</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12 col-md-6 col-lg-3 mb-4">
+        <div class="card shadow-sm bg-info text-white h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-calendar-date"></i>
+                <h3 class="mt-2">{{ today.strftime('%d/%m') }}</h3>
+                <p class="mb-0">Tanggal Hari Ini</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Status Absensi Karyawan -->
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">Status Absensi Karyawan Hari Ini</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Nama</th>
+                                <th>Email</th>
+                                <th>Jam Masuk</th>
+                                <th>Jam Keluar</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in status_absensi %}
+                            <tr>
+                                <td>{{ item.karyawan.nama }}</td>
+                                <td>{{ item.karyawan.email }}</td>
+                                <td>
+                                    {% if item.absensi and item.absensi.jam_masuk %}
+                                        {{ item.absensi.jam_masuk.strftime('%H:%M:%S') }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.absensi and item.absensi.jam_keluar %}
+                                        {{ item.absensi.jam_keluar.strftime('%H:%M:%S') }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.absensi and item.absensi.jam_masuk %}
+                                        <span class="badge bg-success">Hadir</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Belum Hadir</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    Belum ada data karyawan
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
