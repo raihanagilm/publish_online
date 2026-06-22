@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify
 from flask_login import LoginManager
 from config import Config
@@ -15,9 +16,12 @@ login_manager.login_view = 'auth.login'
 login_manager.login_message_category = 'info'
 
 def create_app():
+    # Get the base directory (where app.py is located)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    
     app = Flask(__name__, 
-                static_folder='../frontend/static',
-                template_folder='../frontend/templates')
+                static_folder=os.path.join(base_dir, 'frontend', 'static'),
+                template_folder=os.path.join(base_dir, 'frontend', 'templates'))
     app.config.from_object(Config)
     
     # Init extensions
