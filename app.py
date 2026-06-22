@@ -4,10 +4,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def create_app():
-    """
-    Entry point untuk aplikasi Flask.
-    Mengimpor factory function dari backend untuk menjaga app.py tetap bersih.
-    """
     from backend import create_app as backend_create_app
     return backend_create_app()
 
