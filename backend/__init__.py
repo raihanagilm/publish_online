@@ -8,10 +8,6 @@ def create_app():
     # Determine base and frontend directories robustly
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     frontend_dir = os.path.join(base_dir, 'frontend')
-    uploads_dir = os.path.join(frontend_dir, 'uploads')
-    
-    # Ensure local upload directories exist
-    os.makedirs(uploads_dir, exist_ok=True)
 
     # Initialize Flask app serving frontend statically
     app = Flask(__name__, static_folder=frontend_dir, static_url_path='')

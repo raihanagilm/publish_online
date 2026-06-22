@@ -1,9 +1,6 @@
-import os
-import base64
 import uuid
 import urllib.request
 import json
-import io
 from datetime import datetime, date, timedelta
 from functools import wraps
 from flask import Blueprint, request, jsonify, session, send_from_directory, current_app, redirect
@@ -27,9 +24,9 @@ try:
         _cloudinary_configured = True
         print('[INFO] Cloudinary berhasil dikonfigurasi.')
     else:
-        print('[WARN] Konfigurasi Cloudinary tidak lengkap, foto disimpan lokal.')
+        print('[WARN] Konfigurasi Cloudinary tidak lengkap. Upload foto akan ditolak.')
 except Exception as _e:
-    print(f'[WARN] Cloudinary tidak tersedia: {_e}. Foto disimpan lokal.')
+    print(f'[WARN] Cloudinary tidak tersedia: {_e}. Upload foto akan ditolak.')
 
 
 def upload_foto(base64_str, folder='absensi'):
@@ -44,7 +41,7 @@ def upload_foto(base64_str, folder='absensi'):
             base64_str,
             folder=folder,
             resource_type='image',
-            overwrite=True
+            overwrite=False
         )
         return result.get('secure_url')
     except Exception as e:
