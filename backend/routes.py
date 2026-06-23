@@ -4,7 +4,7 @@ from functools import wraps
 from flask import Blueprint, request, jsonify, session, send_from_directory, current_app, redirect
 from werkzeug.exceptions import HTTPException
 from config import Config
-from backend.models import db, User, ResetToken, Absensi
+from backend.models import db, User, ResetToken, Absensi, TodoItem
 
 # === CLOUDINARY SETUP ===
 _cloudinary_configured = False
@@ -155,6 +155,11 @@ def karyawan_absen():
 @role_required('karyawan')
 def karyawan_riwayat():
     return send_from_directory(current_app.static_folder, 'karyawan/riwayat.html')
+
+@bp.route('/karyawan/todo')
+@role_required('karyawan')
+def karyawan_todo():
+    return send_from_directory(current_app.static_folder, 'karyawan/todo.html')
 
 @bp.route('/reset-password')
 def reset_password_page():
@@ -358,6 +363,82 @@ def karyawan_history():
 
     history = query.order_by(Absensi.tanggal.desc()).all()
     return jsonify([item.to_dict(False) for item in history])
+
+
+# === TODO APIS ===
+@bp.route('/api/todos', methods=['GET', 'POST'])
+@login_required
+def api_todos():
+    user_id = session['user_id']
+
+    if request.method == 'GET':
+        todos = TodoItem.query.filter_by(user_id=user_id).order_by(TodoItem.created_at.desc()).all()
+        return jsonify([todo.to_dict() for todo in todos])
+
+    data = request.get_json() or {}
+    title = data.get('title', '').strip()
+    description = data.get('description', '').strip()
+    due_date_str = data.get('due_date', '').strip()
+
+    if not title:
+        return jsonify({'error': 'Judul tugas wajib diisi'}), 400
+
+    todo = TodoItem(user_id=user_id, title=title, description=description or None)
+    if due_date_str:
+        try:
+            todo.due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Format tanggal jatuh tempo tidak valid'}), 400
+
+    db.session.add(todo)
+    db.session.commit()
+    return jsonify({'message': 'Tugas berhasil dibuat', 'todo': todo.to_dict()}), 201
+
+
+@bp.route('/api/todos/<int:todo_id>', methods=['PUT', 'DELETE'])
+@login_required
+def api_todo_update_delete(todo_id):
+    user_id = session['user_id']
+    todo = TodoItem.query.get(todo_id)
+
+    if not todo or todo.user_id != user_id:
+        return jsonify({'error': 'Tugas tidak ditemukan'}), 404
+
+    if request.method == 'DELETE':
+        db.session.delete(todo)
+        db.session.commit()
+        return jsonify({'message': 'Tugas berhasil dihapus'})
+
+    data = request.get_json() or {}
+    title = data.get('title')
+    description = data.get('description')
+    due_date_str = data.get('due_date')
+    completed = data.get('completed')
+
+    if title is not None:
+        title = title.strip()
+    if description is not None:
+        description = description.strip()
+    if due_date_str is not None:
+        due_date_str = due_date_str.strip()
+
+    if title:
+        todo.title = title
+    if description is not None:
+        todo.description = description or None
+    if due_date_str:
+        try:
+            todo.due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Format tanggal jatuh tempo tidak valid'}), 400
+    elif due_date_str is not None:
+        todo.due_date = None
+
+    if isinstance(completed, bool):
+        todo.completed = completed
+
+    db.session.commit()
+    return jsonify({'message': 'Tugas berhasil diperbarui', 'todo': todo.to_dict()})
 
 
 # === ADMIN APIS ===

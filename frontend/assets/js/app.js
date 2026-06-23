@@ -878,4 +878,124 @@ document.addEventListener('DOMContentLoaded', () => {
     checkKaryawanStatus();
     initWebcamAttendance();
     initKaryawanHistory();
+    initTodoPage();
 });
+
+
+// ==========================================
+// 7. TODO LIST CONTROLLER
+// ==========================================
+async function loadTodoList() {
+    const listContainer = document.getElementById('todo-list');
+    if (!listContainer) return;
+
+    try {
+        const todos = await apiFetch('/api/todos');
+        if (!todos) return;
+
+        if (todos.length === 0) {
+            listContainer.innerHTML = '<div class="text-center py-8 text-light">Belum ada tugas. Tambahkan tugas baru di bawah.</div>';
+            return;
+        }
+
+        listContainer.innerHTML = todos.map(todo => {
+            return `
+                <div class="todo-card${todo.completed ? ' todo-completed' : ''}">
+                    <div class="todo-header">
+                        <div>
+                            <h4>${todo.title}</h4>
+                            <small class="text-light">${todo.due_date ? 'Jatuh tempo: ' + todo.due_date : 'Tanpa tanggal jatuh tempo'}</small>
+                        </div>
+                        <div class="todo-actions">
+                            <button class="btn btn-xs btn-outline btn-toggle-complete" data-id="${todo.id}" data-completed="${todo.completed}">${todo.completed ? '<i class="fas fa-undo"></i> Buka' : '<i class="fas fa-check"></i> Selesai'}</button>
+                            <button class="btn btn-xs btn-danger btn-delete-todo" data-id="${todo.id}"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                    ${todo.description ? `<p class="todo-description">${todo.description}</p>` : ''}
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        listContainer.innerHTML = `<div class="text-center py-8 text-red">Error memuat tugas: ${err.message}</div>`;
+    }
+}
+
+async function submitTodoForm(event) {
+    event.preventDefault();
+    const titleInput = document.getElementById('todo-title');
+    const descriptionInput = document.getElementById('todo-description');
+    const dueDateInput = document.getElementById('todo-due-date');
+    const submitBtn = document.getElementById('btn-add-todo');
+    const errorEl = document.getElementById('todo-error-msg');
+
+    errorEl.style.display = 'none';
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+
+    try {
+        const payload = {
+            title: titleInput.value.trim(),
+            description: descriptionInput.value.trim(),
+            due_date: dueDateInput.value
+        };
+
+        await apiFetch('/api/todos', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        titleInput.value = '';
+        descriptionInput.value = '';
+        dueDateInput.value = '';
+        loadTodoList();
+    } catch (err) {
+        errorEl.innerText = err.message;
+        errorEl.style.display = 'block';
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-plus"></i> Tambah Tugas';
+    }
+}
+
+async function handleTodoAction(event) {
+    const toggleBtn = event.target.closest('.btn-toggle-complete');
+    const deleteBtn = event.target.closest('.btn-delete-todo');
+    if (!toggleBtn && !deleteBtn) return;
+
+    const todoId = toggleBtn ? toggleBtn.dataset.id : deleteBtn.dataset.id;
+    if (!todoId) return;
+
+    if (deleteBtn) {
+        if (!confirm('Hapus tugas ini?')) return;
+        try {
+            await apiFetch(`/api/todos/${todoId}`, { method: 'DELETE' });
+            loadTodoList();
+        } catch (err) {
+            alert('Gagal menghapus tugas: ' + err.message);
+        }
+        return;
+    }
+
+    const completed = toggleBtn.dataset.completed === 'true';
+    try {
+        await apiFetch(`/api/todos/${todoId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ completed: !completed })
+        });
+        loadTodoList();
+    } catch (err) {
+        alert('Gagal memperbarui tugas: ' + err.message);
+    }
+}
+
+function initTodoPage() {
+    if (!document.body.classList.contains('karyawan-todo')) return;
+
+    const form = document.getElementById('todo-form');
+    if (form) {
+        form.addEventListener('submit', submitTodoForm);
+    }
+
+    document.addEventListener('click', handleTodoAction);
+    loadTodoList();
+}
